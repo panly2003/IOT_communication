@@ -16,7 +16,7 @@ def convert_text_to_binary():
     result_text.delete(1.0, tk.END)
     result_text.insert(tk.END, f'{input_text_binary_code}')
 
-def encode_bluetooth_packet(args, binary_data):
+def get_bluetooth_packet(args, binary_data):
     packet_payload_len = args.packet_payload_length  # Packet payload length for segmentation
     blank_len = args.blank_length  # Length of blank space between packets
     bluetooth_packets_seq = []
@@ -39,7 +39,7 @@ def send_binary_data(args):
     input_text_binary_code = result_text.get(1.0, tk.END).replace(" ", "").strip()
     print(f'binary data: {input_text_binary_code}')
     # Add Bluetooth packet to form complete binary_data
-    blue_tooth_binary_data = encode_bluetooth_packet(args, input_text_binary_code)
+    blue_tooth_binary_data = get_bluetooth_packet(args, input_text_binary_code)
     print(f'bluetooth binary data: {blue_tooth_binary_data}')
     # FSK modulation
     fsk_data = modulate_signal(args.sampling_rate, args.frequency_0, args.frequency_1, args.amplitude, args.start_phase, args.duration, blue_tooth_binary_data)
