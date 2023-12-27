@@ -100,10 +100,10 @@ def init_ui(args):
     # Start the main loop
     window.mainloop()
 
-def init_args():
+if __name__ == '__main__':
+    # init args
     import argparse
     parser = argparse.ArgumentParser(description="Choose the parameters")
-
     # Parameters needed for forming complete binary string with Bluetooth packet added to the original binary string
     parser.add_argument("--packet_payload_length", type=int, default=96)  # Maximum length of a packet payload, used for segmentation
     parser.add_argument("--blank_length", type=int, default=60)  # Length of blank space between packets and at the beginning and end
@@ -126,10 +126,5 @@ def init_args():
     parser.add_argument("--threshold", type=int, default=2e11)  # Correlation threshold for preamble
 
     args = parser.parse_args()
-
-    return args
-
-if __name__ == '__main__':
-    args = init_args()
     print(f'args: {args}')
     init_ui(args)
