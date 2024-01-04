@@ -47,4 +47,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Record
-    record_audio(args, 15) ####### change
+    record_audio(args, 29) ####### change

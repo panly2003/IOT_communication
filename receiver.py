@@ -1,8 +1,7 @@
 import scipy.io.wavfile as wav
-import numpy as np
-import wave
 from fsk import demodulate_signal
 from utils import binary_list_to_unicode
+from tkinter import messagebox
 
 if __name__ == "__main__":
     # init args
@@ -11,7 +10,7 @@ if __name__ == "__main__":
     # Parameters needed for forming complete binary string with Bluetooth packet added to the original binary string
     parser.add_argument("--packet_payload_length", type=int, default=192)  # Maximum length of a packet payload, used for segmentation
     parser.add_argument("--blank_length", type=int, default=20)  # Length of blank space between packets and at the beginning and end
-    parser.add_argument("--preamble", type=list, default=[0, 1] * 10)  # Preamble
+    parser.add_argument("--preamble", type=list, default=[1, 1, 1, 1, 0, 0, 0, 0]*3)  # Preamble
 
     # Parameters needed for FSK modulation
     # FSK frequencies corresponding to bit 0 and bit 1
@@ -27,12 +26,12 @@ if __name__ == "__main__":
     parser.add_argument("--save_path", type=str, default="audio/recorded_audio.wav")
 
     # Parameters needed for FSK demodulation
-    parser.add_argument("--threshold", type=int, default=2e9)  # Correlation threshold for preamble
+    parser.add_argument("--threshold", type=int, default=2e11)  # Correlation threshold for preamble
 
     args = parser.parse_args()
 
     # Load
-    test_path = './audio/recorded_wave.wav'
+    test_path = './audio/recorded_audio.wav'
     fs, decoded_wave = wav.read(test_path)
 
     # Demodulation
@@ -42,8 +41,12 @@ if __name__ == "__main__":
     decoded_payload_bits = []
     for item in decoded_result:
         payload, start = item[0], item[1]
-        decoded_payload_bits += payload
+        decoded_payload_bits.extend(payload)
+        # print(binary_list_to_unicode(payload))
     
     # print(f'decoded payload bits: {decoded_payload_bits}')
     str = binary_list_to_unicode(decoded_payload_bits)
     print(f'decoded string: {str}')
+
+    # 弹出框显示文本
+    messagebox.showinfo("Decoded String", str)

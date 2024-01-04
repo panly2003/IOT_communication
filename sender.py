@@ -93,7 +93,7 @@ if __name__ == '__main__':
     # Parameters needed for forming complete binary string with Bluetooth packet added to the original binary string
     parser.add_argument("--packet_payload_length", type=int, default=192)  # Maximum length of a packet payload, used for segmentation
     parser.add_argument("--blank_length", type=int, default=20)  # Length of blank space between packets and at the beginning and end
-    parser.add_argument("--preamble", type=list, default=[0, 1] * 10)  # Preamble
+    parser.add_argument("--preamble", type=list, default=[1, 1, 1, 1, 0, 0, 0, 0]*3)  # Preamble
 
     # Parameters needed for FSK modulation
     # FSK frequencies corresponding to bit 0 and bit 1
