@@ -100,7 +100,7 @@ def demodulate_signal(sampling_rate, frequency_0, frequency_1, amplitude, start_
     while start < len(wave):
         # Find the position of the first preamble in [start: wave_end]
         start_position = find_start_position(sampling_rate, duration, preamble, threshold, start, correlates)
-        print(start_position)
+        # print(start_position)
         
         if start_position < 0: # No preamble found
             break

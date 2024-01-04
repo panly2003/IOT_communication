@@ -23,3 +23,13 @@ def bit_to_int(seq):
     for i in range(8):
         num += (seq[7 - i] << i)
     return num
+
+
+def binary_list_to_unicode(binary_list):
+    # 将二进制列表分割为每 8 位一组
+    chunks = [binary_list[i:i+8] for i in range(0, len(binary_list), 8)]
+
+    # 将每组二进制转换为 Unicode 字符
+    unicode_string = ''.join([chr(int(''.join(map(str, chunk)), 2)) for chunk in chunks])
+
+    return unicode_string
