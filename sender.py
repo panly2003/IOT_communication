@@ -109,7 +109,7 @@ if __name__ == '__main__':
     parser.add_argument("--save_path", type=str, default="audio/res.wav")
 
     # Parameters needed for FSK demodulation
-    parser.add_argument("--threshold", type=int, default=2e11)  # Correlation threshold for preamble
+    parser.add_argument("--threshold", type=int, default=2e9)  # Correlation threshold for preamble
 
     args = parser.parse_args()
     # print(f'args: {args}')
