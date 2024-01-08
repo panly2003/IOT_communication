@@ -12,7 +12,7 @@ pip install -r requirements.txt
   ```
   python sender.py
   ```
-- 录音，结果在`./audio/receiver.wav`中
+- 录音，结果在`./audio/receiver_audio.wav`中
   ```
   python record.py
   ```
