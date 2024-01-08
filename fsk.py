@@ -1,165 +1,105 @@
 import numpy as np
-import scipy.io.wavfile as wav
-from utils import bit_to_int
+from utils import bit_to_int 
 
 
-def generate_pulse(sampling_rate, frequency, amplitude, start_phase, duration):
+def generate_pulse(sampling_rate, frequency, a, start_phase, duration):
+    # 计算帧数
     num_frames = int(duration * sampling_rate)
+    # 生成时间值
     time_values = np.linspace(0, duration, num=num_frames)
-    pulse = np.sin(2 * np.pi * frequency * time_values + start_phase) * amplitude
+    # 生成脉冲信号
+    pulse = np.sin(2 * np.pi * frequency * time_values + start_phase) * a
     return pulse
 
 
-def modulate_signal(sampling_rate, frequency_0, frequency_1, amplitude, start_phase, duration, bits):
-    pulse_0 = generate_pulse(sampling_rate, frequency_0, amplitude, start_phase, duration)
-    pulse_1 = generate_pulse(sampling_rate, frequency_1, amplitude, start_phase, duration)
-    blank_pulse = generate_pulse(sampling_rate, 1, 0, start_phase, duration)
+def modulate(sampling_rate, low_frequency, high_frequency, a, start_phase, duration, bits):
+    # 生成不同比特的脉冲信号
+    pulse_0 = generate_pulse(sampling_rate, low_frequency, a, start_phase, duration)
+    pulse_1 = generate_pulse(sampling_rate, high_frequency, a, start_phase, duration)
+    pulse_3 = generate_pulse(sampling_rate, 12000, a, start_phase, duration)
+    blank_pulse = generate_pulse(sampling_rate, 0, 0, start_phase, duration)
     pulse_len = len(pulse_0)
     
     result_wave = np.zeros(shape=(pulse_len * len(bits)))
     start_index = 0
     
     for bit in bits:
-        if bit == 2:  # for blank
+        if bit == 2:  # 对应空白位
             result_wave[start_index: start_index + pulse_len] = blank_pulse
-        else:
-            if bit == 0:
-                result_wave[start_index: start_index + pulse_len] = pulse_0
-            else:
-                result_wave[start_index: start_index + pulse_len] = pulse_1
+        if bit == 3:  # 对应脉冲3
+            result_wave[start_index: start_index + pulse_len] = pulse_3
+        if bit == 0:  # 对应脉冲0
+            result_wave[start_index: start_index + pulse_len] = pulse_0
+        if bit == 1:  # 对应脉冲1
+            result_wave[start_index: start_index + pulse_len] = pulse_1
         start_index += pulse_len
     
     return result_wave
 
 
-def calculate_correlates(sampling_rate, frequency_0, frequency_1, amplitude, start_phase, duration, preamble, wave):
-    preamble_sequence = modulate_signal(sampling_rate, frequency_0, frequency_1, amplitude, start_phase, duration, bits=preamble)
-    wave_length = len(wave)
-    preamble_length = len(preamble_sequence)
-    start = 0
-    correlates = []
-    
-    while start + preamble_length <= wave_length:
-        current_wave_segment = wave[start: start + preamble_length]
-        correlate = np.dot(current_wave_segment, preamble_sequence)
-        correlates.append(correlate)
-        start += 1
-    
-    return correlates
-
-def find_start_position(sampling_rate, duration, preamble, threshold, start, correlates):
-    real_wave_start_position = -1
-    one_bit_length = sampling_rate * duration
-    length_preamble = int(len(preamble) * one_bit_length)
-    
-    for i in range(len(correlates) - start):
-        if abs(correlates[i + start]) >= threshold and real_wave_start_position == -1:
-            real_wave_start_position = i + start
-            break
-    
-    if real_wave_start_position == -1:
-        return -1
-    
-    position = real_wave_start_position + np.argmax(correlates[real_wave_start_position:real_wave_start_position + length_preamble])
-    return position
-
-
-def demodulate_one(sampling_rate, frequency_0, frequency_1, wave):
+def demodulate_one_bit(sampling_rate, low_frequency, high_frequency, wave):
+    # 傅里叶变换得到频谱
     fourier_result = np.abs(np.fft.fft(wave))
     length = len(fourier_result)
     fourier_result = fourier_result[0: length // 2]
     max_place = np.argmax(fourier_result)
     max_freq = round(max_place / length * sampling_rate)
-    dist_0 = abs(max_freq - frequency_0)
-    dist_1 = abs(max_freq - frequency_1)
-    if dist_0 < dist_1:
-        return 0
-    else:
-        return 1
-    
+    dist_0 = abs(max_freq - low_frequency)
+    dist_2 = abs(max_freq - 0)
+    dist_1 = abs(max_freq - high_frequency)
+    dist_3 = abs(max_freq - 12000)
+    l = [dist_0, dist_1, dist_2, dist_3]
+    return np.argmin(l)
 
-def demodulate_packet(sampling_rate, frequency_0, frequency_1, duration, wave):
+
+def corr_num(list1, list2):
+    # 计算两个列表相同元素的数量比例
+    corr_num = 0
+    for i in range(len(list1)):
+        if list1[i] == list2[i]:
+            corr_num += 1
+    return corr_num / len(list1)
+
+
+def demodulate(sampling_rate, low_frequency, high_frequency, duration, preamble_code, wave):
+    # 解调
     one_bit_length = int(sampling_rate * duration)
     length = len(wave)
     start = 0
-    result = []
+    whole_result = []
     while start + one_bit_length <= length:
         sub_wave = wave[start: start + one_bit_length]
-        the_bit = demodulate_one(sampling_rate, frequency_0, frequency_1, sub_wave)
-        result.append(the_bit)
+        the_bit = demodulate_one_bit(sampling_rate, low_frequency, high_frequency, sub_wave)
+        whole_result.append(the_bit)
         start += one_bit_length
-    return result
 
+    print(whole_result)
 
-def demodulate_signal(sampling_rate, frequency_0, frequency_1, amplitude, start_phase, duration, preamble, threshold, wave):
-    one_bit_length = int(sampling_rate * duration)
-    correlates = calculate_correlates(sampling_rate, frequency_0, frequency_1, amplitude, start_phase, duration, preamble, wave)
-    start = 0
     packet_results = []
-    
-    while start < len(wave):
-        # Find the position of the first preamble in [start: wave_end]
-        start_position = find_start_position(sampling_rate, duration, preamble, threshold, start, correlates)
-        # print(start_position)
-        
-        if start_position < 0: # No preamble found
-            break
 
-        # Decode using the position of preamble
-        # Decode packet length
-        packet_head = wave[start_position + one_bit_length * len(preamble): start_position + one_bit_length * len(preamble) + one_bit_length * 8]
-        decoded_packet_head = demodulate_packet(sampling_rate, frequency_0, frequency_1, duration, packet_head)
-        packet_length = bit_to_int(decoded_packet_head)
-        # Decode payload
-        packet_payload = wave[start_position + one_bit_length * len(preamble) + one_bit_length * 8: start_position + one_bit_length * len(preamble) + one_bit_length * 8 + packet_length * one_bit_length]
-        decoded_payload = demodulate_packet(sampling_rate, frequency_0, frequency_1, duration, packet_payload)
-        packet_results.append((decoded_payload, start_position))
-
-        # update start
-        start = start_position +  (len(preamble) + 8 + packet_length) * one_bit_length
+    # 找前导码位置 + 解调
+    i = 0
+    s = 0
+    while i <= len(whole_result) - len(preamble_code):
+        if corr_num(whole_result[i:i+len(preamble_code)], preamble_code) >= 0.7:
+            s += 1
+            start_place = i
+            # print(start_place)
+            corr_fragments = [corr_num(whole_result[start_place + j: start_place + j + len(preamble_code)], preamble_code) for j in range(len(preamble_code))]     
+            real_start_place = start_place + np.argmax(corr_fragments)
+            while whole_result[real_start_place+len(preamble_code)] == 3:
+                real_start_place += 1
+            # print(real_start_place)
+                
+            # 计算payload长度
+            payload_length = bit_to_int(whole_result[real_start_place+len(preamble_code):real_start_place+len(preamble_code)+8])
+            
+            # 计算payload
+            payload = whole_result[real_start_place+len(preamble_code)+8:real_start_place+len(preamble_code)+8+payload_length]
+            packet_results.append((payload, real_start_place))
+            i = real_start_place + len(preamble_code) + 8 + payload_length
+            
+        else:
+            i += 1
     
     return packet_results
-
-
-if __name__ == '__main__':
-    # Test FSK
-    payload_bits = [0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 
-                    0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 
-                    1, 1, 0, 1, 1, 0, 0, 1, 0, 0]
-    bits_for_modulation = [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-                           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-                           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-                           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-                           2, 2, 2, 2, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 
-                           0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 
-                           0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 
-                           1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 
-                           0, 1, 1, 0, 0, 1, 0, 0, 2, 2, 2, 2, 2, 2, 
-                           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-                           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-                           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 
-                           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
-    # Modulation
-    encoded_wave = modulate_signal(sampling_rate=48000, frequency_0=4000, frequency_1=6000, amplitude=20000.0, start_phase=0, duration=2.5e-2, bits=bits_for_modulation)
-    # Save
-    wav.write('./fsk_test/res.wav', 48000, encoded_wave.astype(np.int16))
-    # Load
-    fs, decoded_wave = wav.read('./fsk_test/res.wav')
-    # Demodulation
-    decoded_result = demodulate_signal(sampling_rate=48000, frequency_0=4000, frequency_1=6000, amplitude=20000.0, start_phase=0, duration=2.5e-2, preamble=[0,1]*10, threshold=2e11, wave=decoded_wave)
-    print(f'decoded_result: {decoded_result}')
-    
-    # Concatenate decoded results
-    decoded_payload_bits = []
-    for item in decoded_result:
-        payload, start = item[0], item[1]
-        decoded_payload_bits += payload
-
-    # Calculate bit accuracy
-    corr_bit_num = 0
-    for i in range(len(payload_bits)):
-        if payload_bits[i] == decoded_payload_bits[i]:
-            corr_bit_num += 1
-    bit_accuracy = corr_bit_num / len(payload_bits)
-    print(f'bit accuracy: {bit_accuracy * 100}%')
-    

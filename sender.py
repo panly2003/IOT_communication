@@ -1,116 +1,85 @@
 from tkinter import scrolledtext
 import tkinter as tk
-from utils import int_to_bit, text_to_binary
+from utils import int_to_bit, text_to_code
 import numpy as np
-import scipy.io.wavfile as wav
 import wave
-from fsk import demodulate_signal, modulate_signal
+from fsk import modulate
 
-entry = None  # UI entry
-input_text = None  # User-input text (English string)
-input_text_binary_code = None  # Binary code of the English string
+# 定义一些常量
+PAYLOAD_LENGTH = 192  # 数据包负载长度
+BLANK_LENGTH = 30  # 空白区长度
+PREAMBLE_CODE = [3]*10  # 前导码
+LOW_FREQUENCY = 1000  # 低频信号频率
+HIGH_FREQUENCY = 6000  # 高频信号频率
+SAMPLING_RATE = 44100  # 采样率
+A = 20000.0  # 振幅
+START_PHASE = 0.0  # 初始相位
+DURATION = 5e-2  # 信号持续时间
+SAVE_PATH = './audio/sender_audio.wav'  # 保存路径
 
-def convert_text_to_binary():
-    global entry, result_text
-    input_text = entry.get(1.0, tk.END).strip()  # Get the entire content of the text box
-    print(f'input text:{input_text}')
-    input_text_binary_code = text_to_binary(input_text)
-    result_text.delete(1.0, tk.END)
-    result_text.insert(tk.END, f'{input_text_binary_code}')
+entry = None
+input_text = None
+original_code = None
 
-def get_bluetooth_packet(args, binary_data):
-    packet_payload_len = args.packet_payload_length  # Packet payload length for segmentation
-    blank_len = args.blank_length  # Length of blank space between packets
-    bluetooth_packets_seq = []
+def add_bluetooth_code(binary_data):
+    bluetooth_code = []
     packet_payload = []
-
     for i in range(len(binary_data)):
         packet_payload.append(int(binary_data[i]))
-        if len(packet_payload) >= packet_payload_len or i == len(binary_data) - 1:
-            bluetooth_packets_seq += ([2] * blank_len)  # Add blank space
-            bluetooth_packets_seq += args.preamble  # Add preamble
-            bluetooth_packets_seq += (int_to_bit(len(packet_payload)))  # Add 8-bit header, encoding data packet length information
-            bluetooth_packets_seq += packet_payload  # Add data content segment
+        if len(packet_payload) >= PAYLOAD_LENGTH or i == len(binary_data) - 1:
+            bluetooth_code += ([2] * BLANK_LENGTH)  # 添加空白区
+            bluetooth_code += PREAMBLE_CODE  # 添加前导码
+            bluetooth_code += (int_to_bit(len(packet_payload)))  # 添加8位头部，编码数据包长度信息
+            bluetooth_code += packet_payload  # 添加数据内容段
             packet_payload = []
-    bluetooth_packets_seq += ([2] * blank_len)
-    return bluetooth_packets_seq
+    bluetooth_code += ([2] * BLANK_LENGTH)
+    return bluetooth_code
 
-def send_binary_data(args):
-    global result_text
-    # Get binary_data directly from the text box, removing spaces
-    input_text_binary_code = result_text.get(1.0, tk.END).replace(" ", "").strip()
-    # print(f'binary data: {input_text_binary_code}')
-    # Add Bluetooth packet to form complete binary_data
-    blue_tooth_binary_data = get_bluetooth_packet(args, input_text_binary_code)
-    # print(f'bluetooth binary data: {blue_tooth_binary_data}')
-    # FSK modulation
-    fsk_data = modulate_signal(args.sampling_rate, args.frequency_0, args.frequency_1, args.amplitude, args.start_phase, args.duration, blue_tooth_binary_data)
-    # print(f'fsk data: {fsk_data}')
-    # Save
-    wf = wave.open(args.save_path, 'wb')
+def send_binary_data():
+    global entry
+    # 直接从文本框获取二进制数据，去除空格
+    input_text = entry.get(1.0, tk.END).strip()  # 获取文本框的全部内容
+    original_code = text_to_code(input_text)
+    original_code = original_code.replace(' ','')
+    bluetooth_code = add_bluetooth_code(original_code)
+
+    # FSK调制
+    fsk_data = modulate(SAMPLING_RATE, LOW_FREQUENCY, HIGH_FREQUENCY, A, START_PHASE, DURATION, bluetooth_code)
+
+    # 保存
+    wf = wave.open(SAVE_PATH, 'wb')
     wf.setnchannels(1)
     wf.setsampwidth(2)
-    wf.setframerate(args.sampling_rate)
+    wf.setframerate(SAMPLING_RATE)
     wf.writeframes(fsk_data.astype(np.int16).tobytes())
     wf.close()
-    # Finish
-    print('finish')
 
-def init_ui(args):
-    # Create the main window
+    # 完成
+    print('完成')
+
+def init_ui():
+    # 创建主窗口
     window = tk.Tk()
-    window.title('Text to Binary Converter')
+    window.title('UI')
 
-    # Set window size and position
+    # 设置窗口大小和位置
     window.geometry('800x600')
-    window.resizable(True, True)  # Allow window resizing
+    window.resizable(True, True)  # 允许窗口调整大小
 
     global entry, result_text
 
-    # Create labels, text boxes, and buttons
-    label = tk.Label(window, text='Enter text:', font=('Arial', 14))
+    # 创建标签、文本框和按钮
+    label = tk.Label(window, text='输入文本:', font=('Arial', 14))
     label.pack(pady=10)
 
     entry = scrolledtext.ScrolledText(window, wrap=tk.WORD, width=40, height=3, font=('Arial', 12))
     entry.pack(pady=10)
 
-    convert_button = tk.Button(window, text='Convert', command=convert_text_to_binary, font=('Arial', 12))
-    convert_button.pack(pady=10)
-
-    result_text = scrolledtext.ScrolledText(window, wrap=tk.WORD, width=40, height=5, font=('Arial', 12))
-    result_text.pack(pady=10)
-
-    send_button = tk.Button(window, text='Send', command=lambda: send_binary_data(args), font=('Arial', 12))
+    send_button = tk.Button(window, text='转换成音频', command=lambda: send_binary_data(), font=('Arial', 12))
     send_button.pack(pady=10)
 
-    # Start the main loop
+    # 启动主循环
     window.mainloop()
 
 if __name__ == '__main__':
-    # init args
-    import argparse
-    parser = argparse.ArgumentParser(description="Choose the parameters")
-    # Parameters needed for forming complete binary string with Bluetooth packet added to the original binary string
-    parser.add_argument("--packet_payload_length", type=int, default=192)  # Maximum length of a packet payload, used for segmentation
-    parser.add_argument("--blank_length", type=int, default=20)  # Length of blank space between packets and at the beginning and end
-    parser.add_argument("--preamble", type=list, default=[0, 1] * 10)  # Preamble
-
-    # Parameters needed for FSK modulation
-    # FSK frequencies corresponding to bit 0 and bit 1
-    parser.add_argument("--frequency_0", type=int, default=4000)
-    parser.add_argument("--frequency_1", type=int, default=6000)
-    # Sampling rate, amplitude, start phase, and duration of each wave segment corresponding to a bit
-    parser.add_argument("--sampling_rate", type=int, default=44100)
-    parser.add_argument("--amplitude", type=float, default=20000.0)
-    parser.add_argument("--start_phase", type=int, default=0)
-    parser.add_argument("--duration", type=float, default=2.5e-2)
-
-    # Parameters needed for saving audio files: save path
-    parser.add_argument("--save_path", type=str, default="audio/res.wav")
-
-    # Parameters needed for FSK demodulation
-    parser.add_argument("--threshold", type=int, default=2e11)  # Correlation threshold for preamble
-
-    args = parser.parse_args()
-    # print(f'args: {args}')
-    init_ui(args)
+    init_ui()
